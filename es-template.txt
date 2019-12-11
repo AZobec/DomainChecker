@@ -1,0 +1,46 @@
+PUT _template/domainchecker-normalisation
+{
+    "index_patterns" : [
+      "domainchecker-*"
+    ],
+    "settings": {
+    "number_of_shards" : "1",
+    "number_of_replicas" : "0"
+  },
+    "mappings" : {
+      "_source" : {
+        "enabled" : true
+      },
+      "properties" : {
+        
+        "record_old": {
+                        "type": "text"
+        },
+        "record_new": {
+            "type": "text"
+        },
+        "recordtype": {
+            "type": "text"
+        },
+        "last_seen": {
+            "type": "date",
+            "format": "epoch_second"
+        },
+        "domain": {
+            "type": "text"
+        },
+        "timestamp":{
+            "type": "date",
+            "format": "epoch_second"
+        },
+
+        "created_at" : {
+          "format" : "EEE MMM dd HH:mm:ss Z yyyy",
+          "type" : "date"
+        }
+      }
+    },
+    "aliases" : { }
+  }
+
+
