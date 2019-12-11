@@ -13,3 +13,11 @@ To perform checks and store in elasticsearch:
 ```bash
 python3 domainchecker.py -f hosts.txt -b database.db -o 127.0.0.1 > /dev/null
 ```
+
+## Installation
+install dependencies :
+```bash
+pip install -r requirements.txt
+```
+Install elasticsearch template in elasticsearch.
+Create Database by giving hosts file
