@@ -4,8 +4,12 @@ DomainChecker aims to perform regular checks on A, NS and MX records, and to sto
 It could be used to monitor domains for protection or hunt/follow known malicious domains (if they pivot)
 
 ## Usage
-to create db :
+To create db :
+```bash
 python3 domainchecker.py -f hosts.txt -c database.db
+```
 
-to perform checks and store in elasticsearch
+To perform checks and store in elasticsearch:
+```bash
 python3 domainchecker.py -f hosts.txt -b database.db -o 127.0.0.1 > /dev/null
+```
