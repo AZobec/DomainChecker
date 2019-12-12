@@ -13,6 +13,7 @@ To perform checks and store in elasticsearch:
 ```bash
 python3 domainchecker.py -f hosts.txt -b database.db -o 127.0.0.1 > /dev/null
 ```
+![ELK-DomainChecker](https://zobec.fr/images/ELK-DomainChecker.jpg)
 
 ## Installation
 install dependencies :
