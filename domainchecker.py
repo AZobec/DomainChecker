@@ -122,26 +122,18 @@ def listgenerator(domain,recordtype,dns_server):
             return (listgenerator)
         except:
             print("error in MX resolver block- maybe no MX record ?")
-    if recordtype == "A":
+    else:
         try:
-            answersA = dnsresolver.query(domain, 'A')
-            for answer in answersA:		
-                ip = str(answer)
-                listgenerator.append(ip)
+            answersRecord = dnsresolver.query(domain, recordtype)
+            for answer in answersRecord:		
+                record = str(answer)
+                listgenerator.append(record)
+
             listgenerator.sort()
             return (listgenerator)
         except:
             print(">>> error in A resolver block - maybe no A record ?")
-    if recordtype == "NS":
-        try:
-            answersNS = dnsresolver.query(domain, 'NS')
-            for answer in answersNS:		
-                ns = str(answer)
-                listgenerator.append(ns)
-            listgenerator.sort()
-            return (listgenerator)
-        except:
-            print(">>> error in NS resolver block - maybe no NS record ?")
+    
  
 #This function is made to insert domains to check in DB
 def firstInsertDB(database_file,domain,recordtype,checked_list):
@@ -150,12 +142,17 @@ def firstInsertDB(database_file,domain,recordtype,checked_list):
     with connect:
         connect.row_factory = lite.Row
         cur = connect.cursor()
-        request = "SELECT * FROM domains WHERE domain=\""+domain+"\""
+        request = "SELECT * FROM domains WHERE domain=\""+domain+"\" AND recordtype=\""+recordtype+"\""
         cur.execute(request)
         rows = cur.fetchall()
+        insertion_list = str(checked_list)
+        #Sanitizing for particular case including " and | in TXT
+        if recordtype == "TXT":
+            insertion_list = "\"%s\"" % insertion_list
+            #print(insertion_list)
         #Then add non existent
         if not rows :
-            request = "INSERT INTO domains(domain,record,recordtype,updatedate) VALUES(\""+domain+"\",\""+str(checked_list)+"\",\""+recordtype+"\","+str(epochdate)+")"
+            request = "INSERT INTO domains(domain,record,recordtype,updatedate) VALUES(\""+domain+"\",\""+insertion_list+"\",\""+recordtype+"\","+str(epochdate)+")"
             try:
                 cur.execute(request)
             except Exception as e:
@@ -177,10 +174,12 @@ def createDB(hosts_file,database_file,dns_server):
                 domain = domain[:-1]
                 mx_list = listgenerator(domain,"MX",dns_server) 
                 ip_list = listgenerator(domain, "A",dns_server)        
-                ns_list = listgenerator(domain,"NS",dns_server) 
+                ns_list = listgenerator(domain,"NS",dns_server)
+                #txt_list = listgenerator(domain,"TXT",dns_server) 
                 firstInsertDB(database_file,domain,"MX",mx_list)
                 firstInsertDB(database_file,domain,"A",ip_list)
                 firstInsertDB(database_file,domain,"NS",ns_list)
+                #firstInsertDB(database_file,domain,"TXT",txt_list)
         
             domainFile.close()
 
