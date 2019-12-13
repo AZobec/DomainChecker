@@ -162,7 +162,7 @@ def firstInsertDB(database_file,domain,recordtype,checked_list):
                 print(">>> Problem inserting into database : "+str(e))
 
 #This function aims to  create the DB
-def createDBrefacto(hosts_file,database_file,dns_server):
+def createDB(hosts_file,database_file,dns_server):
     connect = lite.connect(database_file)
     with connect:
         connect.row_factory = lite.Row
@@ -196,7 +196,7 @@ def checkChange(hosts_file,database_file,es_host,es_port,es_index_name,dns_serve
             ns_list = listgenerator(domain,"NS",dns_server)
             checkRecord(database_file,es_host,es_port,es_index_name,domain,ns_list,"NS")
             
-            
+
 if __name__ == "__main__":
     
     arguments = dict()
@@ -246,7 +246,7 @@ if __name__ == "__main__":
     else:
         if options.create_db != False:
             #createDB(arguments["hosts_file"],arguments["create_db"])
-            createDBrefacto(arguments["hosts_file"],arguments["create_db"],arguments["dns"])
+            createDB(arguments["hosts_file"],arguments["create_db"],arguments["dns"])
             exit()
         elif ((options.database != False) and (options.hosts_file != False)):
             checkChange(arguments["hosts_file"],arguments["database"],arguments["elasticsearch"],arguments["port"],arguments["index"],arguments["dns"])
