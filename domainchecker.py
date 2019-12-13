@@ -61,102 +61,15 @@ def es_create_index(es_object, index_name):
     finally:
         return created
                             
-def createDB(hosts_file,database_file):
-    epochdate = int(datetime.datetime.now().timestamp())
-    connect = lite.connect(database_file)
-    ip_list = list()
-    with connect:
-        connect.row_factory = lite.Row
-        cur = connect.cursor()
-        try:
-            cur.execute("CREATE TABLE domains(id INTEGER PRIMARY KEY, domain TEXT, record TEXT, recordtype TEXT, updatedate TIMESTAMP)")
-        except:
-            print("Database already created")
-        #cur.execute("INSERT INTO domains VALUES(, "domain","ip")
-        with open(hosts_file, 'r') as domainFile:
-            for domain in domainFile:
-                ip_list=list()
-                mx_list=list()
-                ns_list=list()
-                domain = domain[:-1]
-                #For A records
-                try:
-                    answersA = dns.resolver.query(domain,'A')
-                    for answer in answersA: 
-                    #if it worked
-                        ip = str(answer)
-                        ip_list.append(ip)
-                    ip_list.sort()
-                except:
-                    print("error in A resolver block - maybe no A record?")
-                if  ip_list:
-                    #Before need to check if already exists
-                    request = "SELECT * FROM domains WHERE domain=\""+domain+"\""
-                    cur.execute(request)
-                    rows = cur.fetchall()
-                    #Then add non existent
-                    if not rows :
-                        request = "INSERT INTO domains(domain,record,recordtype,updatedate) VALUES(\""+domain+"\",\""+str(ip_list)+"\",\"A\","+str(epochdate)+")"
-                        try:
-                            cur.execute(request)
-                        except:
-                            print("Problem executing Query")
-                
-                try:
-                    answersMX = dns.resolver.query(domain,'MX')
-                    for answer in answersMX: 
-                        #print(str(answer).split(" ")[1])
-                        #if it worked
-                        mx = str(answer).split(" ")[1]
-                        mx_list.append(mx)
-                    mx_list.sort()
-                except:
-                    print("error in MX resolver block - maybe no MX record ?")
-                if mx_list:
-                    #Before need to check if already exists
-                    request = "SELECT * FROM domains WHERE domain=\""+domain+"\""
-                    cur.execute(request)
-                    rows = cur.fetchall()
-                    #Then add non existent
-                    if rows :
-                        request = "INSERT INTO domains(domain,record,recordtype,updatedate) VALUES(\""+domain+"\",\""+str(mx_list)+"\",\"MX\","+str(epochdate)+")"
-                        try:
-                            cur.execute(request)
-                        except:
-                            print("Problem executing Query")
-                #For NS records
-                try:
-                    answersNS = dns.resolver.query(domain,'NS')
-                    for answer in answersNS: 
-                    #if it worked
-                        ns = str(answer)
-                        print(domain+" "+ns)
-                        ns_list.append(ns)
-                    ns_list.sort()
-                except:
-                    print("error in NS resolver block - maybe no NS record?")
-                if ns_list:
-                    #Before need to check if already exists
-                    request = "SELECT * FROM domains WHERE domain=\""+domain+"\""
-                    cur.execute(request)
-                    rows = cur.fetchall()
-                    #Then add non existent
-                    if rows :
-                        request = "INSERT INTO domains(domain,record,recordtype,updatedate) VALUES(\""+domain+"\",\""+str(ns_list)+"\",\"NS\","+str(epochdate)+")"
-                        try:
-                            cur.execute(request)
-                        except:
-                            print("Problem executing Query")
-                
-            domainFile.close()							
+						
 
+#This function is used to connect to Elasticsearch
 def es_connection(es_host,es_port):
     es = Elasticsearch([{'host': es_host, 'port': es_port}])
     return es
 
-
+#This function checks the difference between the actual resolution and the database
 def checkRecord(database_file,es_host,es_port,es_index_name,domain,checked_list,recordtype):
-    print(">>>> Refacto -  checkrecord")
     epochdate = int(datetime.datetime.now().timestamp())
     connect = lite.connect(database_file)
     if es_host != False:
@@ -185,11 +98,21 @@ def checkRecord(database_file,es_host,es_port,es_index_name,domain,checked_list,
                         request = "UPDATE domains SET updatedate =\""+str(epochdate)+"\"  WHERE domain = ? AND recordtype = ?"
                         cur.execute(request,(domain,recordtype))
 
-def listgenerator(domain,recordtype):
+#This function resolv the domains to create lists of MX, A or NS records
+def listgenerator(domain,recordtype,dns_server):
     listgenerator=list()
+    dnsresolver = dns.resolver.Resolver()
+    #Change DNS Server for custom DNS server (to avoid using system default one)
+    if dns_server != False:
+        try:
+            dnsserver = list()
+            dnsserver.append(dns_server)
+            dnsresolver.nameservers = dnsserver
+        except Exception as e :
+            print(">>>> Problem changing DNS : "+str(e))
     if recordtype == "MX":
         try:
-            answersMX = dns.resolver.query(domain,'MX')
+            answersMX = dnsresolver.query(domain,'MX')
             for answer in answersMX: 
                 #print(str(answer).split(" ")[1])
                 #if it worked
@@ -201,7 +124,7 @@ def listgenerator(domain,recordtype):
             print("error in MX resolver block- maybe no MX record ?")
     if recordtype == "A":
         try:
-            answersA = dns.resolver.query(domain, 'A')
+            answersA = dnsresolver.query(domain, 'A')
             for answer in answersA:		
                 ip = str(answer)
                 listgenerator.append(ip)
@@ -211,7 +134,7 @@ def listgenerator(domain,recordtype):
             print(">>> error in A resolver block - maybe no A record ?")
     if recordtype == "NS":
         try:
-            answersNS = dns.resolver.query(domain, 'NS')
+            answersNS = dnsresolver.query(domain, 'NS')
             for answer in answersNS:		
                 ns = str(answer)
                 listgenerator.append(ns)
@@ -219,29 +142,65 @@ def listgenerator(domain,recordtype):
             return (listgenerator)
         except:
             print(">>> error in NS resolver block - maybe no NS record ?")
+ 
+#This function is made to insert domains to check in DB
+def firstInsertDB(database_file,domain,recordtype,checked_list):
+    epochdate = int(datetime.datetime.now().timestamp())
+    connect = lite.connect(database_file)
+    with connect:
+        connect.row_factory = lite.Row
+        cur = connect.cursor()
+        request = "SELECT * FROM domains WHERE domain=\""+domain+"\""
+        cur.execute(request)
+        rows = cur.fetchall()
+        #Then add non existent
+        if not rows :
+            request = "INSERT INTO domains(domain,record,recordtype,updatedate) VALUES(\""+domain+"\",\""+str(checked_list)+"\",\""+recordtype+"\","+str(epochdate)+")"
+            try:
+                cur.execute(request)
+            except Exception as e:
+                print(">>> Problem inserting into database : "+str(e))
 
+#This function aims to  create the DB
+def createDBrefacto(hosts_file,database_file,dns_server):
+    connect = lite.connect(database_file)
+    with connect:
+        connect.row_factory = lite.Row
+        cur = connect.cursor()
+        try:
+            cur.execute("CREATE TABLE domains(id INTEGER PRIMARY KEY, domain TEXT, record TEXT, recordtype TEXT, updatedate TIMESTAMP)")
+        except:
+            print("Database already created")
+        #cur.execute("INSERT INTO domains VALUES(, "domain","ip")
+        with open(hosts_file, 'r') as domainFile:
+            for domain in domainFile:
+                domain = domain[:-1]
+                mx_list = listgenerator(domain,"MX",dns_server) 
+                ip_list = listgenerator(domain, "A",dns_server)        
+                ns_list = listgenerator(domain,"NS",dns_server) 
+                firstInsertDB(database_file,domain,"MX",mx_list)
+                firstInsertDB(database_file,domain,"A",ip_list)
+                firstInsertDB(database_file,domain,"NS",ns_list)
+        
+            domainFile.close()
 
-def checkChangerefacto(hosts_file,database_file,es_host,es_port,es_index_name):
-    print(">>> Refacto - checkChange")
+#This function is used to launch diffs checks on observed domains. It launches the lists factories and the diffs checks
+def checkChange(hosts_file,database_file,es_host,es_port,es_index_name,dns_server):
     with open(hosts_file, 'r') as domainFile:
         for domain in domainFile:
             domain = domain[:-1]
-            mx_list = listgenerator(domain,"MX")
+            mx_list = listgenerator(domain,"MX",dns_server)
             checkRecord(database_file,es_host,es_port,es_index_name,domain,mx_list,"MX")
-            ip_list = listgenerator(domain, "A")
+            ip_list = listgenerator(domain, "A",dns_server)
             checkRecord(database_file,es_host,es_port,es_index_name,domain,ip_list,"A")
-            ns_list = listgenerator(domain,"NS")
+            ns_list = listgenerator(domain,"NS",dns_server)
             checkRecord(database_file,es_host,es_port,es_index_name,domain,ns_list,"NS")
             
             
-
-           
-
 if __name__ == "__main__":
     
     arguments = dict()
     
-
     parser = optparse.OptionParser()
     parser.add_option("-f", "--host-file", dest = 'hosts_file', help = "Hosts to monitor", metavar = "FILE", default = False)
     parser.add_option("-c", "--create-db-in-file", dest = 'create_db', help = "Create DB in specified file if first run", metavar = "DB", default = False)
@@ -249,6 +208,7 @@ if __name__ == "__main__":
     parser.add_option("-e", "--elasticsearch-host", dest= 'elasticsearch', help="Precise Elasticsearch host if wanted or don't use this option -", metavar="output", default=False) 
     parser.add_option("-p", "--port", dest = 'port', help = 'Elasticsearch Port', metavar='PORT' ,default = False)
     parser.add_option("-i", "--index-name", dest='index', help='Elasticsearch Index Name. If false default will be domainchecker-YYYY-MM-DD', metavar='INDEX', default = False)
+    parser.add_option("-d", "--dns-server", dest="dns", help="Change DNS for resolution. System's one if not used", metavar="DNS", default = False)
     options,args = parser.parse_args()
 
     if options.hosts_file != False:
@@ -275,16 +235,21 @@ if __name__ == "__main__":
         daytime = datetime.datetime.now().strftime("%Y-%m-%d")
         es_index_name = "domainchecker-"+daytime
         arguments["index"] = es_index_name
+    if options.dns != False:
+        arguments["dns"] = options.dns
+    elif options.dns == False:
+        arguments["dns"] = False
 
     if len(sys.argv)==1:
         parser.print_help()
         exit()
     else:
         if options.create_db != False:
-            createDB(arguments["hosts_file"],arguments["create_db"])
+            #createDB(arguments["hosts_file"],arguments["create_db"])
+            createDBrefacto(arguments["hosts_file"],arguments["create_db"],arguments["dns"])
             exit()
         elif ((options.database != False) and (options.hosts_file != False)):
-            checkChangerefacto(arguments["hosts_file"],arguments["database"],arguments["elasticsearch"],arguments["port"],arguments["index"])
+            checkChange(arguments["hosts_file"],arguments["database"],arguments["elasticsearch"],arguments["port"],arguments["index"],arguments["dns"])
             exit()
         else :
             print("Usage : python3 domainchecker.py [options]")

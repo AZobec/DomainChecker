@@ -1,2 +1,3 @@
-google.fr
-google.com
+ssi.gouv.fr
+zobec.fr
+toto.fr
